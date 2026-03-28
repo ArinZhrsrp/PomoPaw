@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PomoPaw</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <main class="window-frame">
+        <header class="topbar">
+          <div class="brand">
+            PomoPaw <span class="brand-paw" aria-hidden="true">&#128062;</span>
+          </div>
+
+          <div class="window-actions">
+            <button
+              id="settingsBtn"
+              class="settings-toggle"
+              type="button"
+              aria-label="Open settings"
+            >
+              Settings
+            </button>
+            <button
+              id="minimizeBtn"
+              class="window-control"
+              type="button"
+              aria-label="Minimize app"
+            >
+              -
+            </button>
+            <button
+              id="closeBtn"
+              class="window-control close-control"
+              type="button"
+              aria-label="Close app"
+            >
+              x
+            </button>
+          </div>
+        </header>
+
+        <section class="content-grid">
+          <section class="timer-panel">
+            <div class="sparkle sparkle-a">*</div>
+            <div class="sparkle sparkle-b">o</div>
+            <div class="sparkle sparkle-c">*</div>
+
+            <div class="paw-wrap">
+              <img
+                class="paw-art"
+                src="assets/paw.png"
+                alt=""
+                aria-hidden="true"
+                draggable="false"
+              />
+
+              <div class="paw-center">
+                <div id="timer" class="timer-display">25:00</div>
+              </div>
+            </div>
+
+            <div class="secondary-controls">
+              <button id="startBtn" class="primary-btn" type="button">
+                Start <span aria-hidden="true">&hearts;</span>
+              </button>
+              <button id="pauseBtn" class="secondary-btn" type="button">
+                Pause
+              </button>
+              <button id="resetBtn" class="secondary-btn" type="button">
+                Reset
+              </button>
+            </div>
+
+            <div class="mode-switch" role="tablist" aria-label="Pomodoro modes">
+              <button class="mode-btn active" data-mode="focus" type="button">
+                Focus
+              </button>
+              <button class="mode-btn" data-mode="short" type="button">
+                Short Break
+              </button>
+              <button class="mode-btn" data-mode="long" type="button">
+                Long Break
+              </button>
+            </div>
+
+            <p id="statusText" class="status-text">
+              Ready for a cozy focus session.
+            </p>
+            <p id="ambienceSummary" class="ambience-summary">Ambience off</p>
+          </section>
+
+          <aside class="tasks-panel">
+            <div class="panel-heading">
+              <div class="headline-wrap">
+                <div class="script-heading">Check list</div>
+                <div class="sub-heading">Daily report</div>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <button
+                id="addTodoBtn"
+                class="plus-btn"
+                type="button"
+                aria-label="Add task"
+              >
+                +
+              </button>
+              <label class="todo-input-wrap">
+                <span class="sr-only">Task input</span>
+                <input
+                  id="todoInput"
+                  class="todo-input"
+                  type="text"
+                  maxlength="120"
+                  placeholder="What will you do today?"
+                />
+              </label>
+            </div>
+
+            <div class="report-grid">
+              <div class="report-card">
+                <div class="report-label">Focus sessions</div>
+                <div id="sessionsCount" class="report-value">0</div>
+              </div>
+              <div class="report-card">
+                <div class="report-label">Tasks left</div>
+                <div id="tasksOpenCount" class="report-value">0</div>
+              </div>
+              <div class="report-card">
+                <div class="report-label">Tasks done</div>
+                <div id="tasksDoneCount" class="report-value">0</div>
+              </div>
+            </div>
+
+            <div class="list-section">
+              <div class="section-title">To-do</div>
+              <ul id="todoList" class="task-list" aria-live="polite"></ul>
+            </div>
+
+            <div class="list-section">
+              <div class="section-title">Done</div>
+              <ul
+                id="doneList"
+                class="task-list done-list"
+                aria-live="polite"
+              ></ul>
+            </div>
+
+            <div class="panel-footer">
+              cute focus time <span aria-hidden="true">&hearts;</span>
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+    <div id="settingsModal" class="settings-modal hidden" aria-hidden="true">
+      <div id="settingsBackdrop" class="settings-backdrop"></div>
+
+      <div class="settings-shell">
+        <section
+          class="settings-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settingsTitle"
+        >
+          <div class="settings-header">
+            <div class="settings-head-copy">
+              <h2 id="settingsTitle" class="settings-title">Settings</h2>
+              <p class="settings-copy">
+                Update timer lengths and choose ambience layers.
+              </p>
+            </div>
+          </div>
+
+          <form id="settingsForm" class="settings-form">
+            <div class="settings-group">
+              <div class="settings-group-title">Durations</div>
+
+              <div class="duration-grid">
+                <label class="settings-field">
+                  <span class="settings-field-top">
+                    <span>Focus</span>
+                    <span id="focusDurationValue">25 min</span>
+                  </span>
+                  <input
+                    id="focusDurationInput"
+                    type="range"
+                    min="1"
+                    max="60"
+                    step="1"
+                  />
+                </label>
+
+                <label class="settings-field">
+                  <span class="settings-field-top">
+                    <span>Short break</span>
+                    <span id="shortDurationValue">5 min</span>
+                  </span>
+                  <input
+                    id="shortDurationInput"
+                    type="range"
+                    min="1"
+                    max="30"
+                    step="1"
+                  />
+                </label>
+
+                <label class="settings-field">
+                  <span class="settings-field-top">
+                    <span>Long break</span>
+                    <span id="longDurationValue">15 min</span>
+                  </span>
+                  <input
+                    id="longDurationInput"
+                    type="range"
+                    min="1"
+                    max="60"
+                    step="1"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group-title">Focus ambience</div>
+              <p class="settings-hint">
+                Pick more than one if you want layered sound.
+              </p>
+
+              <div class="sound-grid">
+                <label class="sound-option">
+                  <input type="checkbox" name="ambience" value="rain" />
+                  <span>Rain</span>
+                </label>
+
+                <label class="sound-option">
+                  <input type="checkbox" name="ambience" value="breeze" />
+                  <span>Breeze</span>
+                </label>
+
+                <label class="sound-option">
+                  <input type="checkbox" name="ambience" value="brown" />
+                  <span>Brown Noise</span>
+                </label>
+
+                <label class="sound-option">
+                  <input type="checkbox" name="ambience" value="cafe" />
+                  <span>Cafe Hum</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button class="settings-primary" type="submit">
+                Save &amp; Close
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
