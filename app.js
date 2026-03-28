@@ -69,6 +69,9 @@ const longDurationValue = document.getElementById("longDurationValue");
 const ambienceInputs = Array.from(
   document.querySelectorAll('input[name="ambience"]'),
 );
+const isDesktopApp = Boolean(window.desktopWindow);
+
+document.body.classList.toggle("desktop-app", isDesktopApp);
 
 function loadState() {
   try {
@@ -200,7 +203,7 @@ function renderTimer() {
     button.classList.toggle("active", button.dataset.mode === state.mode);
   });
 
-  document.title = `PomoPaw - ${formatTime(state.timeLeft)}`;
+  document.title = "PomoPaw";
 }
 
 function renderStats() {
