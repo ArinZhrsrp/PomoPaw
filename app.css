@@ -818,7 +818,12 @@ button {
   }
 }
 
-body.desktop-app .content-grid {
+body.embedded-preview {
+  overflow: hidden;
+}
+
+body.desktop-app .content-grid,
+body.embedded-preview .content-grid {
   min-height: 0;
   height: calc(100vh - 56px);
   align-items: stretch;
@@ -826,16 +831,20 @@ body.desktop-app .content-grid {
 }
 
 body.desktop-app .timer-panel,
-body.desktop-app .tasks-panel {
+body.desktop-app .tasks-panel,
+body.embedded-preview .timer-panel,
+body.embedded-preview .tasks-panel {
   align-self: stretch;
 }
 
-body.desktop-app .timer-panel {
+body.desktop-app .timer-panel,
+body.embedded-preview .timer-panel {
   justify-content: center;
   padding-top: 6px;
 }
 
-body.desktop-app .tasks-panel {
+body.desktop-app .tasks-panel,
+body.embedded-preview .tasks-panel {
   justify-content: flex-start;
   padding-top: 4px;
   padding-bottom: 0;

@@ -2,6 +2,8 @@
 
 PomoPaw is a cute Pomodoro desktop app built with Electron. It combines a focus timer, a checklist, daily progress counters, layered ambience sounds, and a custom paw-themed interface in a small desktop-friendly layout.
 
+The project also includes a marketing-style landing page so you can showcase the app like a product website.
+
 ## Features
 
 - Focus, short break, and long break timer modes
@@ -12,6 +14,7 @@ PomoPaw is a cute Pomodoro desktop app built with Electron. It combines a focus 
 - Custom frameless desktop window with in-app minimize and close controls
 - Local persistence using `localStorage`, so your timer settings and tasks stay saved between sessions
 - Cute custom UI with a paw-based timer display
+- Standalone landing page with a live embedded app preview
 
 ## Built With
 
@@ -46,6 +49,15 @@ You can also run:
 npm run dev
 ```
 
+### View the landing page
+
+Open `landing.html` in your browser to view the website version of PomoPaw.
+
+- `landing.html` is the landing page
+- `app.html` is the embedded app preview used inside the landing page
+
+If you only want to view the website, you do not need to run Electron.
+
 ## Build
 
 ### Windows
@@ -66,6 +78,8 @@ npm run build:mac
 .
 |- main.js        Electron main process and window setup
 |- preload.js     Safe bridge for desktop window actions
+|- landing.html   Marketing landing page for showcasing the app
+|- landing.css    Landing page styling
 |- app.html       Main app UI
 |- app.css        Styling and layout
 |- app.js         Timer, checklist, settings, persistence, and ambience logic

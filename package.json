@@ -19,6 +19,8 @@
       "app.html",
       "app.css",
       "app.js",
+      "landing.html",
+      "landing.css",
       "renderer.js",
       "assets/**/*",
       "package.json"

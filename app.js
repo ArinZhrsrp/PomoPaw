@@ -70,8 +70,10 @@ const ambienceInputs = Array.from(
   document.querySelectorAll('input[name="ambience"]'),
 );
 const isDesktopApp = Boolean(window.desktopWindow);
+const isEmbeddedPreview = window.self !== window.top;
 
 document.body.classList.toggle("desktop-app", isDesktopApp);
+document.body.classList.toggle("embedded-preview", isEmbeddedPreview);
 
 function loadState() {
   try {
