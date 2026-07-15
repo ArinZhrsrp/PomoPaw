@@ -831,9 +831,13 @@ todoList.addEventListener("click", handleTaskClick);
 doneList.addEventListener("click", handleTaskClick);
 document.addEventListener("keydown", handleGlobalKeydown);
 
-minimizeBtn.addEventListener("click", () => {
-  window.desktopWindow?.minimize();
-});
+if (window.desktopWindow?.minimize) {
+  minimizeBtn.addEventListener("click", () => {
+    window.desktopWindow.minimize();
+  });
+} else {
+  minimizeBtn.remove();
+}
 
 closeBtn.addEventListener("click", () => {
   stopAmbienceLayers();
