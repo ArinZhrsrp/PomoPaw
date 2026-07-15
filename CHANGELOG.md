@@ -17,6 +17,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - The in-app minimize button is now hidden automatically when PomoPaw is opened in a browser, since it only has meaning inside the Electron desktop window.
+- Renamed `landing.html` to `index.html` so Vercel (and other static hosts) serve the landing page at `/` without needing a rewrite rule.
+
+### Fixed
+
+- Fixed a 404 on the deployed site's root URL, caused by `/` having no rewrite target that static hosts recognize by default.
 
 ## [1.0.0] - 2026-03-29
 

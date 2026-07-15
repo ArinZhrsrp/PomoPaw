@@ -51,9 +51,9 @@ npm run dev
 
 ### View the landing page
 
-Open `landing.html` in your browser to view the website version of PomoPaw.
+Open `index.html` in your browser to view the website version of PomoPaw.
 
-- `landing.html` is the landing page
+- `index.html` is the landing page (kept as `index.html` so it's served automatically at `/` on static hosts like Vercel)
 - `app.html` is the embedded app preview used inside the landing page
 
 If you only want to view the website, you do not need to run Electron.
@@ -78,7 +78,7 @@ npm run build:mac
 .
 |- main.js        Electron main process and window setup
 |- preload.js     Safe bridge for desktop window actions
-|- landing.html   Marketing landing page for showcasing the app
+|- index.html     Marketing landing page for showcasing the app (served at /)
 |- landing.css    Landing page styling
 |- app.html       Main app UI
 |- app.css        Styling and layout
@@ -105,10 +105,10 @@ Packaging is configured in `package.json` using `electron-builder`.
 
 ## Deploying the Website to Vercel
 
-`landing.html` and `app.html` are plain static files, so they can be hosted on Vercel without a build step. The repo includes `vercel.json` and `.vercelignore` to support this:
+`index.html` and `app.html` are plain static files, so they can be hosted on Vercel without a build step. The repo includes `vercel.json` and `.vercelignore` to support this:
 
-- `/` serves `landing.html` (the marketing site)
-- `/app` serves `app.html` (the web version of the app)
+- `/` serves `index.html` (the marketing site) automatically, since that's the standard entry point every static host looks for
+- `/app` serves `app.html` (the web version of the app) via a rewrite in `vercel.json`
 - Install/build commands are no-ops, since there is nothing to compile and the Electron `devDependencies` don't need to be installed for the website
 
 ### Steps
@@ -125,7 +125,7 @@ vercel
 
 ### Note on the Windows installer size
 
-`downloads/PomoPaw.exe` is roughly 104 MB. Vercel's Hobby plan limits static file uploads to 100 MB, so this file may fail to deploy on Hobby. If that happens, either upgrade to a Pro plan (1 GB static file limit) or host the installer elsewhere (e.g. a GitHub Release or object storage) and point the download buttons in `landing.html` at that URL instead.
+`downloads/PomoPaw.exe` is roughly 104 MB. Vercel's Hobby plan limits static file uploads to 100 MB, so this file may fail to deploy on Hobby. If that happens, either upgrade to a Pro plan (1 GB static file limit) or host the installer elsewhere (e.g. a GitHub Release or object storage) and point the download buttons in `index.html` at that URL instead.
 
 ## License
 
