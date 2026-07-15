@@ -85,6 +85,9 @@ npm run build:mac
 |- app.js         Timer, checklist, settings, persistence, and ambience logic
 |- assets/        App assets such as the paw image
 |- build/         Build resources and app icons
+|- vercel.json    Vercel routing/build config for hosting the website
+|- .vercelignore  Files excluded from the Vercel static deployment
+|- CHANGELOG.md   Version history
 ```
 
 ## Notes
@@ -99,6 +102,30 @@ Packaging is configured in `package.json` using `electron-builder`.
 
 - Windows target: `nsis`
 - macOS target: `dmg`
+
+## Deploying the Website to Vercel
+
+`landing.html` and `app.html` are plain static files, so they can be hosted on Vercel without a build step. The repo includes `vercel.json` and `.vercelignore` to support this:
+
+- `/` serves `landing.html` (the marketing site)
+- `/app` serves `app.html` (the web version of the app)
+- Install/build commands are no-ops, since there is nothing to compile and the Electron `devDependencies` don't need to be installed for the website
+
+### Steps
+
+1. Push this repo to GitHub (or your Git provider of choice).
+2. In the [Vercel dashboard](https://vercel.com/new), import the repository. Vercel will detect it as a static project from `vercel.json`.
+3. Deploy. No environment variables are required.
+
+Alternatively, from the project root with the [Vercel CLI](https://vercel.com/docs/cli) installed:
+
+```bash
+vercel
+```
+
+### Note on the Windows installer size
+
+`downloads/PomoPaw.exe` is roughly 104 MB. Vercel's Hobby plan limits static file uploads to 100 MB, so this file may fail to deploy on Hobby. If that happens, either upgrade to a Pro plan (1 GB static file limit) or host the installer elsewhere (e.g. a GitHub Release or object storage) and point the download buttons in `landing.html` at that URL instead.
 
 ## License
 
