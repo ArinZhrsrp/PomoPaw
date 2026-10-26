@@ -1,227 +1,169 @@
-<?php
-declare(strict_types=1);
+name: Deploy to SFWORKS
 
-/**
- * SFWorks scoped GitHub auto-sync deployer (PHP 7.2+).
- * Copy separately per site. Edit SITE_ROOT and config.php (outside webroot).
- * Existing config keys: deploy_secret, github_owner, github_repo, github_branch,
- * deploy_path, backup_path.
- * Optional config: sync_roots (e.g. ['index.html','media','assets','css','js']).
- * Only paths in sync_roots are managed. Never use '.' or public_html as a sync root.
- */
-header('Content-Type: application/json');
-header('Cache-Control: no-store');
-function fail(int $status, string $message): void {
-    http_response_code($status);
-    echo json_encode(['message' => $message], JSON_UNESCAPED_SLASHES);
-    exit;
-}
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    header('Allow: POST');
-    fail(405, 'POST required');
-}
-// For each website, change only this path and its config.php.
-const SITE_ROOT = '/home/sfworks/SFWORKS-DEPLOY/arin/github-actions/pomopaw';
-$root = SITE_ROOT;
-if (!is_file($root . '/config.php')) fail(503, 'Config unavailable');
-$config = require $root . '/config.php';
-if (!is_array($config)) fail(503, 'Invalid config');
-foreach (['deploy_secret','github_owner','github_repo','github_branch','deploy_path','backup_path'] as $key) {
-    if (!isset($config[$key]) || !is_string($config[$key]) || $config[$key] === '') fail(503, 'Incomplete config');
-}
-$secret = $config['deploy_secret'];
-if (!preg_match('/^[a-f0-9]{64}$/D', $secret)) fail(503, 'Invalid secret');
-$ts = $_SERVER['HTTP_X_DEPLOY_TIMESTAMP'] ?? '';
-$sig = $_SERVER['HTTP_X_DEPLOY_SIGNATURE'] ?? '';
-$body = file_get_contents('php://input', false, null, 0, 4097);
-if (!is_string($ts) || !preg_match('/^[0-9]{10}$/D', $ts) || abs(time() - (int)$ts) > 60) fail(401, 'Invalid timestamp');
-if (!is_string($body) || strlen($body) > 4096) fail(400, 'Invalid body');
-if (!is_string($sig) || !preg_match('/^[a-f0-9]{64}$/D', $sig) || !hash_equals(hash_hmac('sha256', $ts . '.' . $body, $secret), $sig)) fail(401, 'Invalid signature');
-$data = json_decode($body, true);
-if (!is_array($data) || ($data['repository'] ?? null) !== $config['github_owner'] . '/' . $config['github_repo'] || ($data['branch'] ?? null) !== $config['github_branch'] || !is_string($data['commit'] ?? null) || !preg_match('/^[a-f0-9]{40}$/D', $data['commit'])) fail(400, 'Invalid request');
+# SFWORKS Auto-Sync v2.1 workflow (no build: HTML/CSS/JS, PHP, Electron web files, Supabase/Firebase via CDN).
+# Per project, change ONLY the lines marked  # <-- CHANGE
+# Secrets (Settings > Secrets and variables > Actions):
+#   DEPLOY_SECRET    required, same 64-hex value as deploy_secret in config.php
+#   DEPLOY_USERNAME  only if the _deploy folder is password protected
+#   DEPLOY_PASSWORD  only if the _deploy folder is password protected
 
-// Hub defaults. For other sites set sync_roots explicitly in their config.php.
-$roots = $config['sync_roots'] ?? ['index.html','favicon.ico','media','assets','css','js'];
-if (!is_array($roots) || !$roots) fail(503, 'Invalid sync roots');
-function safePath(string $p): bool {
-    if ($p === '' || strlen($p) > 240 || strpos($p, '\\') !== false || strpos($p, "\0") !== false || strpos($p, '/') === 0 || preg_match('~(^|/)(\.|\.\.|\.git|\.github|_deploy|_hub_deploy)(/|$)~i', $p)) return false;
-    return (bool)preg_match('~^[A-Za-z0-9_./@+ -]+$~D', $p) && strpos($p, '//') === false;
-}
-$roots = array_values(array_unique($roots));
-foreach ($roots as $r) if (!is_string($r) || !safePath($r) || substr($r, -1) === '/' || in_array($r, ['.', '..'], true)) fail(503, 'Unsafe sync root');
-function managed(string $p, array $roots): bool {
-    foreach ($roots as $r) if ($p === $r || strpos($p, $r . '/') === 0) return true;
-    return false;
-}
-function ensureParents(string $base, string $relative): void {
-    $segments = explode('/', dirname($relative));
-    $current = $base;
-    foreach ($segments as $segment) {
-        if ($segment === '.') continue;
-        $current .= '/' . $segment;
-        if (is_link($current)) throw new RuntimeException('Symlink parent forbidden');
-        if (!is_dir($current) && !mkdir($current, 0755)) throw new RuntimeException('Cannot create directory');
-    }
-}
-function removeTree(string $path): void {
-    if (!is_dir($path)) return;
-    foreach (new DirectoryIterator($path) as $f) {
-        if ($f->isDot()) continue;
-        $p = $f->getPathname();
-        if ($f->isDir() && !$f->isLink()) removeTree($p);
-        elseif (!unlink($p)) throw new RuntimeException('Cannot clean workspace');
-    }
-    if (!rmdir($path)) throw new RuntimeException('Cannot remove workspace');
-}
-function fetchArchive(string $url, string $dest): void {
-    $fp = fopen($dest, 'wb');
-    if (!$fp) throw new RuntimeException('Cannot open archive file');
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_FILE=>$fp,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_MAXREDIRS=>3,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>90,CURLOPT_USERAGENT=>'SFWorks-AutoSync/2.0',CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_REDIR_PROTOCOLS=>CURLPROTO_HTTPS]);
-    $ok = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    fclose($fp);
-    if (!$ok || $code !== 200 || filesize($dest) > 50*1024*1024) throw new RuntimeException('Archive download failed');
-}
-function atomicWrite(string $source, string $dest): void {
-    $temp = $dest . '.deploytmp-' . bin2hex(random_bytes(6));
-    if (!copy($source, $temp)) throw new RuntimeException('Cannot stage file');
-    if (!rename($temp, $dest)) { @unlink($temp); throw new RuntimeException('Cannot replace file'); }
-}
-$target = rtrim($config['deploy_path'], '/');
-$backupDir = rtrim($config['backup_path'], '/');
-$tmpDir = $root . '/tmp';
-$manifestPath = $root . '/managed-files.json';
-$statePath = $root . '/last-deployed-commit.txt';
-if (!is_dir($target) || !is_dir($backupDir) || !is_dir($tmpDir) || is_link($target)) fail(503, 'Required directory unavailable');
-$lock = fopen($root . '/deploy.lock', 'c');
-if (!$lock) fail(503, 'Cannot open lock');
-if (!flock($lock, LOCK_EX | LOCK_NB)) { fclose($lock); fail(409, 'Deployment already running'); }
-$workspace = null;
-$backup = null;
-$mutationStarted = false;
-$before = [];
-$oldManifestText = is_file($manifestPath) ? file_get_contents($manifestPath) : null;
-$oldStateText = is_file($statePath) ? file_get_contents($statePath) : null;
-try {
-    $old = [];
-    if ($oldManifestText !== null) {
-        $decoded = json_decode($oldManifestText, true);
-        if (!is_array($decoded) || array_keys($decoded) !== range(0, count($decoded) - 1)) throw new RuntimeException('Invalid previous manifest');
-        foreach ($decoded as $p) {
-            if (!is_string($p) || !safePath($p) || !managed($p, $roots)) throw new RuntimeException('Unsafe previous manifest');
-            $old[$p] = true;
-        }
-    }
-    $workspace = $tmpDir . '/run-' . bin2hex(random_bytes(8));
-    if (!mkdir($workspace, 0700) || !mkdir($workspace . '/stage', 0700)) throw new RuntimeException('Cannot create workspace');
-    $url = 'https://github.com/' . rawurlencode($config['github_owner']) . '/' . rawurlencode($config['github_repo']) . '/archive/' . $data['commit'] . '.zip';
-    fetchArchive($url, $workspace . '/source.zip');
-    $zip = new ZipArchive();
-    if ($zip->open($workspace . '/source.zip') !== true) throw new RuntimeException('Cannot open source ZIP');
-    $new = [];
-    $total = 0;
-    try {
-        for ($i=0; $i<$zip->numFiles; $i++) {
-            $info = $zip->statIndex($i);
-            $name = $info['name'] ?? '';
-            $slash = strpos($name, '/');
-            if ($slash === false) throw new RuntimeException('Unexpected ZIP layout');
-            $rel = substr($name, $slash+1);
-            if ($rel === '' || substr($rel, -1) === '/') continue;
-            if (!safePath($rel) || !managed($rel, $roots)) continue;
-            // Never deploy executable server-side scripts, secrets, or dotfiles.
-            if (preg_match('~(^|/)(?:\.env(?:\..*)?|config\.php|\.htaccess|\.user\.ini)$~i', $rel) || preg_match('~\.(?:php\d*|phtml|phar|cgi|pl|sh|py|exe|bat|sql|log|key|pem|ini)$~i', $rel)) continue;
-            $external = ($info['external_attributes'] ?? 0) >> 16;
-            if (($external & 0170000) === 0120000) throw new RuntimeException('ZIP symlink forbidden');
-            $size = (int)($info['size'] ?? 0);
-            if ($size > 10*1024*1024 || $total + $size > 80*1024*1024) throw new RuntimeException('Deployment size limit exceeded');
-            $total += $size;
-            if (isset($new[$rel])) throw new RuntimeException('Duplicate ZIP path');
-            ensureParents($workspace . '/stage', $rel);
-            $src = $zip->getStream($name);
-            if (!$src) throw new RuntimeException('Cannot read ZIP entry');
-            $dst = fopen($workspace . '/stage/' . $rel, 'wb');
-            if (!$dst) { fclose($src); throw new RuntimeException('Cannot stage ZIP entry'); }
-            $copied = stream_copy_to_stream($src, $dst, $size+1);
-            fclose($src); fclose($dst);
-            if ($copied !== $size) throw new RuntimeException('Incomplete ZIP entry');
-            $new[$rel] = true;
-        }
-    } finally { $zip->close(); }
-    if (!isset($new['index.html']) || !preg_match('/<(!doctype\s+html|html)(\s|>)/i', (string)file_get_contents($workspace . '/stage/index.html'))) throw new RuntimeException('Valid index.html required');
-    if (count($new) > 1000) throw new RuntimeException('Too many files');
-    // On the first run, never delete any existing file not recorded in our manifest.
-    $deleted = array_diff_key($old, $new);
-    $affected = array_unique(array_merge(array_keys($new), array_keys($deleted)));
-    sort($affected);
-    foreach ($affected as $p) {
-        $dest = $target . '/' . $p;
-        $walk = $target;
-        foreach (explode('/', dirname($p)) as $part) {
-            if ($part === '.') continue;
-            $walk .= '/' . $part;
-            if (is_link($walk)) throw new RuntimeException('Unsafe destination parent');
-        }
-        if (is_link($dest) || (file_exists($dest) && !is_file($dest))) throw new RuntimeException('Unsafe destination');
-        if (is_file($dest)) $before[$p] = true;
-    }
-    $backup = $backupDir . '/autosync-' . gmdate('Ymd-His') . '-' . substr($data['commit'],0,8) . '-' . bin2hex(random_bytes(4)) . '.zip';
-    $bk = new ZipArchive();
-    if ($bk->open($backup, ZipArchive::CREATE|ZipArchive::EXCL) !== true) throw new RuntimeException('Cannot create backup');
-    foreach ($before as $p=>$_) if (!$bk->addFile($target . '/' . $p, 'files/' . $p)) { $bk->close(); throw new RuntimeException('Cannot add backup file'); }
-    $meta = json_encode(['existing'=>array_keys($before),'old_manifest'=>$oldManifestText,'old_state'=>$oldStateText], JSON_UNESCAPED_SLASHES);
-    if ($meta === false || !$bk->addFromString('rollback.json', $meta) || !$bk->close()) throw new RuntimeException('Cannot finalize backup');
-    $check = new ZipArchive();
-    if ($check->open($backup) !== true) throw new RuntimeException('Backup unreadable');
-    foreach ($before as $p=>$_) if ($check->getFromName('files/' . $p) === false) { $check->close(); throw new RuntimeException('Backup incomplete'); }
-    $check->close();
-    $mutationStarted = true;
-    foreach ($new as $p=>$_) {
-        ensureParents($target, $p);
-        atomicWrite($workspace . '/stage/' . $p, $target . '/' . $p);
-    }
-    foreach ($deleted as $p=>$_) if (is_file($target . '/' . $p) && !unlink($target . '/' . $p)) throw new RuntimeException('Cannot remove retired file');
-    $manifestText = json_encode(array_keys($new), JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
-    if ($manifestText === false) throw new RuntimeException('Cannot encode manifest');
-    if (file_put_contents($manifestPath . '.tmp', $manifestText . "\n", LOCK_EX) === false || !rename($manifestPath . '.tmp', $manifestPath)) throw new RuntimeException('Cannot save manifest');
-    if (file_put_contents($statePath . '.tmp', $data['commit'] . "\n", LOCK_EX) === false || !rename($statePath . '.tmp', $statePath)) throw new RuntimeException('Cannot save state');
-    $message = 'Auto-sync completed: ' . count($new) . ' files, ' . count($deleted) . ' retired';
-    $status = 200;
-} catch (Throwable $e) {
-    error_log('SFWorks auto-sync error: ' . $e->getMessage());
-    $message = 'Deployment failed before live changes';
-    $status = 500;
-    if ($mutationStarted && $backup && is_file($backup)) {
-        try {
-            $bk = new ZipArchive();
-            if ($bk->open($backup) !== true) throw new RuntimeException('Cannot read rollback archive');
-            foreach ($new ?? [] as $p=>$_) {
-                if (!isset($before[$p]) && is_file($target . '/' . $p)) unlink($target . '/' . $p);
-            }
-            foreach ($before as $p=>$_) {
-                $contents = $bk->getFromName('files/' . $p);
-                if ($contents === false) throw new RuntimeException('Missing rollback entry');
-                ensureParents($target, $p);
-                $restore = $workspace . '/restore-' . bin2hex(random_bytes(6));
-                if (file_put_contents($restore, $contents) === false) throw new RuntimeException('Cannot stage rollback');
-                atomicWrite($restore, $target . '/' . $p);
-            }
-            $bk->close();
-            if ($oldManifestText === null) @unlink($manifestPath); else file_put_contents($manifestPath, $oldManifestText, LOCK_EX);
-            if ($oldStateText === null) @unlink($statePath); else file_put_contents($statePath, $oldStateText, LOCK_EX);
-            $message = 'Deployment failed; rollback restored';
-        } catch (Throwable $rollbackError) {
-            error_log('SFWorks auto-sync rollback failed: ' . $rollbackError->getMessage());
-            $message = 'Deployment failed; manual recovery required';
-        }
-    }
-} finally {
-    @unlink($manifestPath . '.tmp');
-    @unlink($statePath . '.tmp');
-    if ($workspace && is_dir($workspace)) { try { removeTree($workspace); } catch (Throwable $e) { error_log('Workspace cleanup failed'); } }
-    flock($lock, LOCK_UN);
-    fclose($lock);
-}
-fail($status, $message);
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sfworks-deploy
+  cancel-in-progress: false
+
+env:
+  DEPLOY_URL: https://pomopaw.sfworks.top/_deploy/deploy.php  # <-- CHANGE
+
+jobs:
+  deploy:
+    name: Deploy to DirectAdmin
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send signed deployment request
+        shell: bash
+        env:
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_SECRET }}
+          DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, hmac, json, os, sys, time
+          import urllib.error, urllib.request
+
+          def stop(msg, hint=""):
+              print("::error::" + msg)
+              if hint:
+                  print("HINT: " + hint)
+              sys.exit(1)
+
+          url = os.environ.get("DEPLOY_URL", "").strip()
+          secret = "".join(os.environ.get("DEPLOY_SECRET", "").split())
+          username = os.environ.get("DEPLOY_USERNAME", "").strip()
+          password = os.environ.get("DEPLOY_PASSWORD", "").strip()
+          repository = os.environ["GITHUB_REPOSITORY"]
+          source_branch = os.environ["GITHUB_REF_NAME"]
+          branch = os.environ.get("DEPLOY_BRANCH") or source_branch
+          commit = os.environ.get("DEPLOY_COMMIT") or os.environ["GITHUB_SHA"]
+
+          print("Endpoint  :", url)
+          print("Repository:", repository)
+          print("Branch    :", branch)
+          print("Commit    :", commit)
+
+          if source_branch != "main":
+              stop("This workflow only deploys the main branch (got '" + source_branch + "').",
+                   "Run the workflow again and choose branch main.")
+          if not url.startswith("https://") or "PROJECT" in url:
+              stop("DEPLOY_URL is not set correctly in deploy.yml.",
+                   "Edit the DEPLOY_URL line, e.g. https://pomopaw.sfworks.top/_deploy/deploy.php")
+          if not secret:
+              stop("Secret DEPLOY_SECRET is missing.",
+                   "Add it in Settings > Secrets and variables > Actions.")
+          if len(secret) != 64 or any(c not in "0123456789abcdef" for c in secret):
+              stop("DEPLOY_SECRET must be exactly 64 lowercase hex characters (0-9, a-f).",
+                   "Copy it again from config.php without quotes or spaces.")
+          if bool(username) != bool(password):
+              stop("Only one of DEPLOY_USERNAME / DEPLOY_PASSWORD is set.",
+                   "Set both (folder is password protected) or delete both (not protected).")
+
+          headers = {"User-Agent": "SFWORKS-GitHub-Actions/2.1"}
+          if username:
+              token = base64.b64encode((username + ":" + password).encode("utf-8")).decode("ascii")
+              headers["Authorization"] = "Basic " + token
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+          opener = urllib.request.build_opener(NoRedirect)
+
+          def call(req, timeout):
+              try:
+                  with opener.open(req, timeout=timeout) as res:
+                      return res.status, res.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as err:
+                  return err.code, err.read().decode("utf-8", "replace")
+              except urllib.error.URLError as err:
+                  stop("Cannot connect to the endpoint: " + str(err.reason),
+                       "Check DEPLOY_URL, DNS and SSL for the subdomain.")
+
+          def message_of(text):
+              try:
+                  data = json.loads(text)
+                  return data if isinstance(data, dict) else {}
+              except ValueError:
+                  return {}
+
+          # 1) Readiness check (GET). Changes nothing on the server.
+          code, text = call(urllib.request.Request(url, headers=headers, method="GET"), 30)
+          data = message_of(text)
+          if code == 401:
+              stop("HTTP 401 from the endpoint (folder password).",
+                   "DEPLOY_USERNAME / DEPLOY_PASSWORD do not match the Password Protected Directory, or are missing.")
+          if code in (301, 302, 303, 307, 308):
+              stop("The endpoint redirected (HTTP %d)." % code,
+                   "Use the exact https:// address in DEPLOY_URL and make sure SSL is active.")
+          if code == 404:
+              stop("HTTP 404: deploy.php not found at DEPLOY_URL.",
+                   "Check the subdomain Document Root and that _deploy/deploy.php exists.")
+          if code != 405 or data.get("message") != "POST required":
+              print(text[:500])
+              stop("Unexpected answer from the endpoint (HTTP %d)." % code,
+                   "Open DEPLOY_URL in a browser; it must show {\"message\":\"POST required\",...}.")
+          if "ready" in data:
+              failed = [k for k, v in data.get("checks", {}).items() if v is not True]
+              if failed:
+                  stop("Server is not ready: " + ", ".join(failed),
+                       "Fix these items on the hosting (see SOP troubleshooting), then run again.")
+              print("Readiness check: all OK")
+          else:
+              print("Readiness check not available (older deployer); continuing.")
+
+          # 2) Signed deployment request (POST).
+          body = json.dumps({"repository": repository, "branch": branch, "commit": commit},
+                            separators=(",", ":")).encode("utf-8")
+          ts = str(int(time.time()))
+          sig = hmac.new(secret.encode("utf-8"), ts.encode("utf-8") + b"." + body, hashlib.sha256).hexdigest()
+          post_headers = dict(headers)
+          post_headers.update({"Content-Type": "application/json",
+                               "X-Deploy-Timestamp": ts,
+                               "X-Deploy-Signature": sig})
+          code, text = call(urllib.request.Request(url, data=body, headers=post_headers, method="POST"), 170)
+          message = message_of(text).get("message", "")
+          print("HTTP:", code)
+          print("Response:", text[:500])
+
+          hints = {
+              "Invalid signature": "DEPLOY_SECRET in GitHub is different from deploy_secret in config.php.",
+              "Invalid timestamp": "Server clock is off by more than 60 seconds. Run again; if it repeats, contact the hosting.",
+              "Invalid request": "In config.php, github_owner + github_repo must equal '" + repository + "' and github_branch must equal '" + branch + "' (same capital letters).",
+              "Invalid secret": "deploy_secret in config.php must be 64 lowercase hex characters.",
+              "Config unavailable": "config.php is missing, or SITE_ROOT in deploy.php points to the wrong folder.",
+              "Incomplete config": "A required key in config.php is empty or missing.",
+              "Required directory unavailable": "deploy_path, backup_path or tmp/ folder does not exist.",
+              "Deployment already running": "Another deployment is running. Wait one minute and run again.",
+              "Archive download failed": "Repository must be Public and its ZIP under 50 MB (no large .exe/.zip files in the repo).",
+              "Valid index.html required": "index.html must be a real HTML page (with <!doctype html> or <html>).",
+              "not found in repository or sync_roots": "The entry file (index.html / index.php) must be in the repo root and listed in sync_roots.",
+              "Invalid entry_file": "entry_file must be 'index.html', or 'index.php' together with 'allow_php' => true.",
+              "Deployment size limit exceeded": "A synced file is over 10 MB, or all synced files are over 80 MB.",
+          }
+          if code == 200 and message.startswith("Auto-sync completed: "):
+              print("Deployment verified: " + message)
+              sys.exit(0)
+          hint = next((h for k, h in hints.items() if k in message), "")
+          if code == 401 and not message:
+              hint = "Folder password rejected. Check DEPLOY_USERNAME / DEPLOY_PASSWORD."
+          if code == 403 and not message:
+              hint = "Blocked by the hosting firewall (ModSecurity) or file permissions. Ask the hosting to check."
+          stop("Deployment failed (HTTP %d): %s" % (code, message or "no JSON message"), hint)
+          PY
