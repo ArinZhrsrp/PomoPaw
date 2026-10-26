@@ -1,1 +1,4 @@
 node_modules
+
+# Installers are uploaded to hosting / GitHub Releases, never committed
+downloads/*.exe
