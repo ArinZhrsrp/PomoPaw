@@ -53,7 +53,7 @@ npm run dev
 
 Open `index.html` in your browser to view the website version of PomoPaw.
 
-- `index.html` is the landing page (kept as `index.html` so it's served automatically at `/` on static hosts like Vercel)
+- `index.html` is the landing page (kept as `index.html` so it's served automatically at `/` on static hosts)
 - `app.html` is the embedded app preview used inside the landing page
 
 If you only want to view the website, you do not need to run Electron.
@@ -85,8 +85,6 @@ npm run build:mac
 |- app.js         Timer, checklist, settings, persistence, and ambience logic
 |- assets/        App assets such as the paw image
 |- build/         Build resources and app icons
-|- vercel.json    Vercel routing/build config for hosting the website
-|- .vercelignore  Files excluded from the Vercel static deployment
 |- CHANGELOG.md   Version history
 ```
 
@@ -103,29 +101,11 @@ Packaging is configured in `package.json` using `electron-builder`.
 - Windows target: `nsis`
 - macOS target: `dmg`
 
-## Deploying the Website to Vercel
+## Deploying the Website
 
-`index.html` and `app.html` are plain static files, so they can be hosted on Vercel without a build step. The repo includes `vercel.json` and `.vercelignore` to support this:
+`index.html` and `app.html` are plain static files, so there is no build step. Every push to `main` runs `.github/workflows/deploy.yml`, which sends a signed request to the SFWORKS Auto-Sync deployer at `pomopaw.sfworks.top`.
 
-- `/` serves `index.html` (the marketing site) automatically, since that's the standard entry point every static host looks for
-- `/app` serves `app.html` (the web version of the app) via a rewrite in `vercel.json`
-- Install/build commands are no-ops, since there is nothing to compile and the Electron `devDependencies` don't need to be installed for the website
-
-### Steps
-
-1. Push this repo to GitHub (or your Git provider of choice).
-2. In the [Vercel dashboard](https://vercel.com/new), import the repository. Vercel will detect it as a static project from `vercel.json`.
-3. Deploy. No environment variables are required.
-
-Alternatively, from the project root with the [Vercel CLI](https://vercel.com/docs/cli) installed:
-
-```bash
-vercel
-```
-
-### Note on the Windows installer size
-
-`downloads/PomoPaw.exe` is roughly 104 MB. Vercel's Hobby plan limits static file uploads to 100 MB, so this file may fail to deploy on Hobby. If that happens, either upgrade to a Pro plan (1 GB static file limit) or host the installer elsewhere (e.g. a GitHub Release or object storage) and point the download buttons in `index.html` at that URL instead.
+The Windows installer (`downloads/PomoPaw.exe`, roughly 104 MB) is not committed to the repo; upload it to the hosting manually.
 
 ## License
 

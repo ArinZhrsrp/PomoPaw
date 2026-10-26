@@ -8,7 +8,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Vercel deployment configuration (`vercel.json`, `.vercelignore`) so the landing page and web app can be hosted online.
 - "Use Web Version" links in the site header, hero section, and download section, letting visitors try PomoPaw directly in the browser without installing it.
 - Notices recommending the desktop app for the best experience whenever the web version is offered.
 - A "PomoPaw for Mac" coming-soon card in the download section.
@@ -17,7 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - The in-app minimize button is now hidden automatically when PomoPaw is opened in a browser, since it only has meaning inside the Electron desktop window.
-- Renamed `landing.html` to `index.html` so Vercel (and other static hosts) serve the landing page at `/` without needing a rewrite rule.
+- Renamed `landing.html` to `index.html` so static hosts serve the landing page at `/` without needing a rewrite rule.
 
 ### Fixed
 
