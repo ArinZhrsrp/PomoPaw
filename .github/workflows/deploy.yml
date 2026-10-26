@@ -94,7 +94,10 @@ jobs:
                   return err.code, err.read().decode("utf-8", "replace")
               except urllib.error.URLError as err:
                   stop("Cannot connect to the endpoint: " + str(err.reason),
-                       "Check DEPLOY_URL, DNS and SSL for the subdomain.")
+                       "Check that the subdomain exists in DirectAdmin, and check DEPLOY_URL, DNS and SSL.")
+              except OSError as err:
+                  stop("No answer from the endpoint in time: " + str(err),
+                       "The web server may be restarting (for example right after creating a subdomain). Wait 2 minutes, then Re-run all jobs.")
 
           def message_of(text):
               try:
